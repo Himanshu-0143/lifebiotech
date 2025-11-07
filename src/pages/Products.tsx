@@ -9,15 +9,19 @@ import { useToast } from '@/hooks/use-toast';
 import { slugify } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { medicines } from '@/data/medicines';
+import { Medicine } from '@/types/medicine';
 
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState('');
   const { addToCart } = useCart();
   const { toast } = useToast();
 
-  const { data: products, isLoading, error } = useQuery({
+  // First try to get products from Supabase
+  const { data: supabaseProducts, isLoading, error } = useQuery({
     queryKey: ['products', searchQuery],
     queryFn: async () => {
+      console.log('Fetching products from Supabase...');
       let query = supabase
         .from('products')
         .select('*');
@@ -27,18 +31,35 @@ export default function Products() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      console.log('Supabase query result:', { data, error });
+      
+      if (error) {
+        console.error('Supabase query error:', error);
+        return null;
+      }
+      return data;
     },
   });
 
-  const filteredProducts = products || [];
+  // Fallback to local data if Supabase fails or returns empty
+  const products = supabaseProducts?.length ? supabaseProducts : medicines;
+  console.log('Using products:', products);
+
+  const filteredProducts = products?.filter((product) =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.composition?.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
+
+  // Helper function to get stock quantity regardless of data source
+  const getStock = (product: any): number => {
+    return product.stock ?? product.stockQuantity ?? 0;
+  };
 
   const handleAddToCart = (product: any) => {
     addToCart({
       id: product.id,
       name: product.name,
-      price: parseFloat(product.price),
+      price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
       form: product.form,
     });
     toast({
@@ -86,7 +107,7 @@ export default function Products() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-2xl font-bold text-primary">₹{product.price}</span>
                 <span className="text-sm text-muted-foreground">
-                  Stock: {product.stock}
+                  Stock: {getStock(product)}
                 </span>
               </div>
               <div className="flex gap-2">
@@ -100,7 +121,7 @@ export default function Products() {
                 </Link>
                 <Button
                   onClick={() => handleAddToCart(product)}
-                  disabled={product.stock === 0}
+                  disabled={getStock(product) === 0}
                   className="flex-1"
                 >
                   <ShoppingCart className="w-4 h-4 mr-1" />
