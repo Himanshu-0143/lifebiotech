@@ -57,23 +57,35 @@ export default function Checkout() {
         let productId = item.id;
 
         if (!isUUID(productId)) {
-          // Try to find the product in the database by name (or id column if you have a mapping)
+          // Try to find the product in the database by name or original id
           const { data: prodData, error: prodError } = await supabase
             .from('products')
             .select('id')
-            .eq('name', item.name)
+            .or(`name.eq.${item.name},name.eq.${item.id}`)
             .limit(1)
             .single();
 
           if (prodError) {
-            console.warn('Could not find product by name; prodError:', prodError);
-          }
+            console.warn('Product lookup failed:', { item, error: prodError });
+            
+            // Try another lookup with exact match
+            const { data: retryData, error: retryError } = await supabase
+              .from('products')
+              .select('id')
+              .eq('name', item.name)
+              .limit(1)
+              .single();
 
-          if (prodData && prodData.id) {
+            if (retryError || !retryData) {
+              throw new Error(`Product not found: ${item.name}. Please try adding the product to cart again.`);
+            }
+            
+            productId = retryData.id;
+          } else if (prodData && prodData.id) {
             productId = prodData.id;
           } else {
-            // If we couldn't resolve a DB id, throw a clear error so the UX shows a helpful message
-            throw new Error(`Unable to resolve product id for cart item: ${item.name} (id: ${item.id}). Ensure the product exists in the database.`);
+            // If we couldn't resolve a DB id, throw a clear error
+            throw new Error(`Product not available: ${item.name}. Please remove it from cart and try again.`);
           }
         }
 
