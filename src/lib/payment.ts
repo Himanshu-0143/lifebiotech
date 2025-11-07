@@ -41,18 +41,13 @@ export async function createPaymentSession({
     }
 
     // 2. Create order on server
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4242';
-    // If running in production (not localhost) and API_BASE is still localhost,
-    // surface a helpful error so the failure is obvious instead of silently
-    // failing when the browser cannot reach a local server on the deployed site.
-    if (typeof window !== 'undefined' && window.location && !window.location.hostname.includes('localhost')) {
-      if (API_BASE.includes('localhost')) {
-        const msg = 'Payment server not configured: VITE_API_URL is not set. Deploy the payment server and set VITE_API_URL in your frontend environment variables.';
-        console.error(msg);
-        throw new Error(msg);
-      }
-    }
-    const createOrderUrl = `${API_BASE.replace(/\/$/, '')}/create-order`;
+    // Prefer an explicit VITE_API_URL, otherwise use a relative path so serverless
+    // functions (e.g. Vercel /api routes) work without extra config.
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const base = API_BASE ? API_BASE.replace(/\/$/, '') : '';
+    const createOrderUrl = `${base}/api/create-order`;
+
+    console.log('Creating order via:', createOrderUrl);
 
     const response = await fetch(createOrderUrl, {
       method: 'POST',
