@@ -43,7 +43,15 @@ export async function createPaymentSession({
     // 2. Create order on server
     // Prefer an explicit VITE_API_URL, otherwise use a relative path so serverless
     // functions (e.g. Vercel /api routes) work without extra config.
-    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    let API_BASE = import.meta.env.VITE_API_URL ?? '';
+    // If a localhost API is configured but the site is not running on localhost,
+    // ignore it and use relative /api endpoints instead.
+    if (typeof window !== 'undefined' && window.location && !window.location.hostname.includes('localhost')) {
+      if (API_BASE.includes('localhost')) {
+        console.warn('VITE_API_URL points to localhost in production; falling back to same-origin /api endpoints');
+        API_BASE = '';
+      }
+    }
     const base = API_BASE ? API_BASE.replace(/\/$/, '') : '';
     const createOrderUrl = `${base}/api/create-order`;
 

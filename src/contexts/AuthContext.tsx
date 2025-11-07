@@ -56,15 +56,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAdminRole = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
         .eq('role', 'admin')
-        .single();
-      
-      setIsAdmin(!!data && !error);
-    } catch (error) {
+        .maybeSingle();
+
+      // 406 can occur if no row matches with Prefer: return=representation; treat as not admin silently.
+      if (status === 406 || (!data && !error)) {
+        setIsAdmin(false);
+        return;
+      }
+      if (error) {
+        console.warn('admin role lookup failed:', error.message);
+        setIsAdmin(false);
+        return;
+      }
+      setIsAdmin(!!data);
+    } catch (err) {
+      console.warn('admin role check unexpected error:', (err as any)?.message);
       setIsAdmin(false);
     }
   };
