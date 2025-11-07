@@ -6,20 +6,33 @@ import { Input } from '@/components/ui/input';
 import { Search, ShoppingCart } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
-import { medicines } from '@/data/medicines';
 import { slugify } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState('');
   const { addToCart } = useCart();
   const { toast } = useToast();
 
-  const products = medicines;
+  const { data: products, isLoading, error } = useQuery({
+    queryKey: ['products', searchQuery],
+    queryFn: async () => {
+      let query = supabase
+        .from('products')
+        .select('*');
+      
+      if (searchQuery) {
+        query = query.or(`name.ilike.%${searchQuery}%,composition.ilike.%${searchQuery}%`);
+      }
 
-  const filteredProducts = products?.filter((product) =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.composition?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const filteredProducts = products || [];
 
   const handleAddToCart = (product: any) => {
     addToCart({
@@ -73,7 +86,7 @@ export default function Products() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-2xl font-bold text-primary">₹{product.price}</span>
                 <span className="text-sm text-muted-foreground">
-                  Stock: {product.stockQuantity}
+                  Stock: {product.stock}
                 </span>
               </div>
               <div className="flex gap-2">
@@ -87,7 +100,7 @@ export default function Products() {
                 </Link>
                 <Button
                   onClick={() => handleAddToCart(product)}
-                  disabled={product.stockQuantity === 0}
+                  disabled={product.stock === 0}
                   className="flex-1"
                 >
                   <ShoppingCart className="w-4 h-4 mr-1" />

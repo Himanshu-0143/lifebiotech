@@ -53,40 +53,64 @@ export default function Checkout() {
 
       const resolvedOrderItems = [] as Array<{ order_id: string; product_id: string; quantity: number; price: number }>;
 
+      // Log cart contents for debugging
+      console.log('Processing cart items:', cart);
+
       for (const item of cart) {
         let productId = item.id;
 
         if (!isUUID(productId)) {
-          // Try to find the product in the database by name or original id
-          const { data: prodData, error: prodError } = await supabase
+          console.log('Looking up product:', { name: item.name, id: item.id });
+          
+          // First try: exact name match
+          const { data: exactMatch, error: exactError } = await supabase
             .from('products')
-            .select('id')
-            .or(`name.eq.${item.name},name.eq.${item.id}`)
-            .limit(1)
+            .select('id, name')
+            .eq('name', item.name)
             .single();
 
-          if (prodError) {
-            console.warn('Product lookup failed:', { item, error: prodError });
-            
-            // Try another lookup with exact match
-            const { data: retryData, error: retryError } = await supabase
-              .from('products')
-              .select('id')
-              .eq('name', item.name)
-              .limit(1)
-              .single();
-
-            if (retryError || !retryData) {
-              throw new Error(`Product not found: ${item.name}. Please try adding the product to cart again.`);
-            }
-            
-            productId = retryData.id;
-          } else if (prodData && prodData.id) {
-            productId = prodData.id;
-          } else {
-            // If we couldn't resolve a DB id, throw a clear error
-            throw new Error(`Product not available: ${item.name}. Please remove it from cart and try again.`);
+          if (exactMatch) {
+            console.log('Found exact match:', exactMatch);
+            productId = exactMatch.id;
+            continue;
           }
+
+          console.log('No exact match, trying fuzzy search');
+
+          // Second try: case-insensitive search
+          const { data: fuzzyMatch, error: fuzzyError } = await supabase
+            .from('products')
+            .select('id, name')
+            .ilike('name', item.name)
+            .single();
+
+          if (fuzzyMatch) {
+            console.log('Found fuzzy match:', fuzzyMatch);
+            productId = fuzzyMatch.id;
+            continue;
+          }
+
+          // Final try: search by original ID
+          const { data: idMatch, error: idError } = await supabase
+            .from('products')
+            .select('id, name')
+            .eq('name', item.id)
+            .single();
+
+          if (idMatch) {
+            console.log('Found match by ID:', idMatch);
+            productId = idMatch.id;
+            continue;
+          }
+
+          console.error('Product lookup failed:', {
+            item,
+            exactError,
+            fuzzyError,
+            idError
+          });
+
+          throw new Error(`Product not found: ${item.name}. Please try adding the product to cart again.`);
         }
 
         resolvedOrderItems.push({

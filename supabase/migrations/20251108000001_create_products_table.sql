@@ -7,7 +7,7 @@ create table if not exists public.products (
     composition text,
     price numeric(10,2) not null,
     manufacturer text,
-    stock_quantity integer default 0,
+    stock integer default 0,
     category text,
     image_url text,
     created_at timestamptz default now(),
@@ -30,14 +30,21 @@ create trigger set_timestamp
     execute procedure update_updated_at_column();
 
 -- Insert initial products
-insert into public.products (name, form, description, composition, price, manufacturer, stock_quantity, category, image_url)
+insert into public.products (name, form, description, composition, price, manufacturer, stock, category, image_url)
 values
     ('D3Life-60K', 'Capsule', 'High-potency Vitamin D3 supplement for bone health and immunity', 'Cholecalciferol (Vitamin D3) 60,000 IU', 120.00, 'LifeBiotech Pharmaceuticals', 500, 'Supplements', '/medicines/d3life-60k.jpg'),
     ('Templow-TH4', 'Tablet', 'Pain relief and inflammation reduction medication', 'Aceclofenac 100mg & Thiocolchicoside 4mg', 89.99, 'LifeBiotech Pharmaceuticals', 150, 'Pain Relief', '/medicines/templow-th4.jpg'),
-    ('Life Vit 9G', 'Syrup', 'Complete multivitamin syrup with minerals and antioxidants', null, 195.00, 'LifeBiotech Pharmaceuticals', 300, 'Supplements', '/medicines/life-vit-9g.jpg'),
-    ('Templow-TH8', 'Tablet', 'Strong pain relief for severe muscular and joint pain', null, 125.00, 'LifeBiotech Pharmaceuticals', 750, 'Pain Relief', '/medicines/templow-th8.jpg'),
-    ('Life Vit', 'Syrup', 'General multivitamin syrup for daily health maintenance', null, 145.00, 'LifeBiotech Pharmaceuticals', 400, 'Supplements', '/medicines/life-vit.jpg'),
-    ('KALCI-GOLD', 'Tablet', 'High-strength calcium supplement with Vitamin D3', null, 180.00, 'LifeBiotech Pharmaceuticals', 600, 'Supplements', '/medicines/kalci-gold.jpg')
+    ('Life Vit 9G', 'Syrup', 'Complete multivitamin syrup with minerals and antioxidants', 'Multivitamins and Minerals', 195.00, 'LifeBiotech Pharmaceuticals', 300, 'Supplements', '/medicines/life-vit-9g.jpg'),
+    ('Templow-TH8', 'Tablet', 'Strong pain relief for severe muscular and joint pain', 'Enhanced Pain Relief Formula', 125.00, 'LifeBiotech Pharmaceuticals', 750, 'Pain Relief', '/medicines/templow-th8.jpg'),
+    ('Life Vit', 'Syrup', 'General multivitamin syrup for daily health maintenance', 'Essential Vitamins Complex', 145.00, 'LifeBiotech Pharmaceuticals', 400, 'Supplements', '/medicines/life-vit.jpg'),
+    ('KALCI-GOLD', 'Tablet', 'High-strength calcium supplement with Vitamin D3', 'Calcium + Vitamin D3', 180.00, 'LifeBiotech Pharmaceuticals', 600, 'Supplements', '/medicines/kalci-gold.jpg'),
+    ('Orthokq', 'Gel', 'Topical pain relief gel for joint and muscle pain', 'Pain Relief Gel', 120.00, 'LifeBiotech Pharmaceuticals', 350, 'Pain Relief', '/medicines/orthokq.jpg'),
+    ('RG Care', 'Tablet', 'Probiotic supplement for digestive health', 'Probiotic Complex', 225.00, 'LifeBiotech Pharmaceuticals', 300, 'Gastroenterology', '/medicines/rg-care.jpg'),
+    ('LMox-CV.LB', 'Tablet', 'Broad-spectrum antibiotic combination', 'Antibiotic Complex', 285.00, 'LifeBiotech Pharmaceuticals', 200, 'Antibiotics', '/medicines/lmox-cv-lb.jpg'),
+    ('Lifer-XT', 'Tablet', 'Extended-release iron supplement with vitamins', 'Iron + Vitamins', 165.00, 'LifeBiotech Pharmaceuticals', 400, 'Supplements', '/medicines/lifer-xt.jpg'),
+    ('KG.Cort-6', 'Tablet', 'Corticosteroid for severe inflammation treatment', 'Corticosteroid', 315.00, 'LifeBiotech Pharmaceuticals', 150, 'Anti-inflammatory', '/medicines/kg-cort-6.jpg'),
+    ('PN-40', 'Injection', 'Injectable proton pump inhibitor for severe acid reflux', 'PPI Complex', 445.00, 'LifeBiotech Pharmaceuticals', 100, 'Gastroenterology', '/medicines/pn-40.jpg'),
+    ('Life-Cef', 'Injection', 'High-potency injectable antibiotic for severe infections', 'Advanced Antibiotic', 525.00, 'LifeBiotech Pharmaceuticals', 80, 'Antibiotics', '/medicines/life-cef.jpg')
 on conflict (name) do update set
     form = excluded.form,
     description = excluded.description,
