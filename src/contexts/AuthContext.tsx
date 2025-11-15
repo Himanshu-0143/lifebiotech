@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -16,12 +16,76 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Session timeout duration in milliseconds (4 minutes)
+const SESSION_TIMEOUT = 4 * 60 * 1000;
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  // Reset activity timer
+  const resetActivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Only set timeout if user is logged in
+    if (user) {
+      timeoutRef.current = setTimeout(() => {
+        handleSessionTimeout();
+      }, SESSION_TIMEOUT);
+    }
+  }, [user]);
+
+  // Handle session timeout
+  const handleSessionTimeout = async () => {
+    if (user) {
+      await supabase.auth.signOut();
+      setIsAdmin(false);
+      toast({
+        title: 'Session Expired',
+        description: 'You have been logged out due to inactivity. Please sign in again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Track user activity
+  useEffect(() => {
+    if (!user) return;
+
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    const handleActivity = () => {
+      resetActivityTimer();
+    };
+
+    // Add event listeners for user activity
+    activityEvents.forEach(event => {
+      window.addEventListener(event, handleActivity);
+    });
+
+    // Initial timer setup
+    resetActivityTimer();
+
+    // Cleanup
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [user, resetActivityTimer]);
 
   useEffect(() => {
     // Set up auth state listener
@@ -30,13 +94,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Check admin role after state updates
+        // Don't check admin role - treat all users as non-admin until table exists
+        setIsAdmin(false);
+        
         if (session?.user) {
-          setTimeout(() => {
-            checkAdminRole(session.user.id);
-          }, 0);
+          // Reset timer when user signs in
+          resetActivityTimer();
         } else {
           setIsAdmin(false);
+          // Clear timeout when user signs out
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
         }
       }
     );
@@ -46,28 +115,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdminRole(session.user.id);
+        resetActivityTimer();
       }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [resetActivityTimer]);
 
-  const checkAdminRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .eq('role', 'admin')
-        .single();
-      
-      setIsAdmin(!!data && !error);
-    } catch (error) {
-      setIsAdmin(false);
-    }
-  };
+  // Temporarily disabled - uncomment after creating user_roles table in Supabase
+  // const checkAdminRole = async (userId: string) => {
+  //   try {
+  //     const { data, error } = await supabase
+  //       .from('user_roles')
+  //       .select('role')
+  //       .eq('user_id', userId)
+  //       .eq('role', 'admin')
+  //       .maybeSingle();
+
+  //     if (error) {
+  //       setIsAdmin(false);
+  //       return;
+  //     }
+
+  //     setIsAdmin(!!data);
+  //   } catch (err) {
+  //     setIsAdmin(false);
+  //   }
+  // };
 
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;

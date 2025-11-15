@@ -76,68 +76,80 @@ export default function Products() {
   }
 
   return (
-    <div className="container-custom py-12">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">Our Products</h1>
-        <p className="text-muted-foreground mb-6">
-          Explore our comprehensive range of quality pharmaceutical products
-        </p>
-        
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-          <Input
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+      <div className="container-custom py-8 sm:py-12">
+        <div className="mb-8 sm:mb-12 animate-fade-in">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 gradient-text">Our Products</h1>
+          <p className="text-muted-foreground mb-6 text-sm sm:text-base">
+            Explore our comprehensive range of quality pharmaceutical products
+          </p>
+          
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+            <Input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-12 shadow-md focus:shadow-lg transition-shadow"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredProducts?.map((product) => (
-          <Card key={product.id} className="card-hover overflow-hidden border-0 shadow-card">
-            <div className="bg-gradient-primary h-24"></div>
-            <CardContent className="pt-6">
-              <h3 className="font-bold text-lg mb-1">{product.name}</h3>
-              <p className="text-sm text-muted-foreground mb-2">{product.form}</p>
-              <p className="text-xs text-muted-foreground mb-4 line-clamp-2">
-                {product.composition}
-              </p>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-2xl font-bold text-primary">₹{product.price}</span>
-                <span className="text-sm text-muted-foreground">
-                  Stock: {getStock(product)}
-                </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          {filteredProducts?.map((product, index) => (
+            <Card key={product.id} className={`card-hover overflow-hidden border-0 shadow-card group animate-scale-in stagger-${Math.min(index + 1, 6)}`}>
+              <div className="bg-gradient-primary h-32 relative overflow-hidden">
+                <div className="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition-colors shimmer"></div>
               </div>
-              <div className="flex gap-2">
-                <Link 
-                  to={`/products/${encodeURIComponent(slugify(product.id))}`} 
-                  className="flex-1"
-                >
-                  <Button variant="outline" className="w-full">
-                    Details
+              <CardContent className="pt-4 sm:pt-6">
+                <h3 className="font-bold text-base sm:text-lg mb-1 group-hover:text-primary transition-colors">{product.name}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">{product.form}</p>
+                <p className="text-xs text-muted-foreground mb-4 line-clamp-2">
+                  {product.composition}
+                </p>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xl sm:text-2xl font-bold text-primary">₹{product.price}</span>
+                  <span className={`text-xs px-2 sm:px-3 py-1 rounded-full font-medium ${
+                    getStock(product) > 0 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {getStock(product) > 0 ? `Stock: ${getStock(product)}` : 'Out of Stock'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Link 
+                    to={`/products/${encodeURIComponent(slugify(product.id))}`} 
+                    className="flex-1"
+                  >
+                    <Button variant="outline" className="w-full hover:bg-primary hover:text-white transition-all">
+                      Details
+                    </Button>
+                  </Link>
+                  <Button
+                    onClick={() => handleAddToCart(product)}
+                    disabled={getStock(product) === 0}
+                    className="flex-1 shadow-md hover:shadow-lg"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1" />
+                    Add
                   </Button>
-                </Link>
-                <Button
-                  onClick={() => handleAddToCart(product)}
-                  disabled={getStock(product) === 0}
-                  className="flex-1"
-                >
-                  <ShoppingCart className="w-4 h-4 mr-1" />
-                  Add
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredProducts?.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No products found matching your search.</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      )}
+
+        {filteredProducts?.length === 0 && (
+          <div className="text-center py-16 sm:py-20 animate-fade-in">
+            <div className="inline-flex p-6 rounded-full bg-muted mb-4">
+              <Search className="w-12 h-12 text-muted-foreground" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No products found</h3>
+            <p className="text-muted-foreground">Try adjusting your search to find what you're looking for.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
