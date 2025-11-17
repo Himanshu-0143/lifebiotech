@@ -219,13 +219,7 @@ export default function Auth() {
     const email = formData.get('resetEmail') as string;
 
     try {
-      // Check if user exists
-      const { data: userData, error: userError } = await supabase.auth.signInWithPassword({
-        email,
-        password: 'dummy', // Just checking if user exists
-      });
-
-      // Generate and send OTP
+      // Generate and send OTP (we'll send regardless of whether user exists for security)
       const otp = generateOTP();
       
       const { error: otpError } = await (supabase as any)
@@ -304,27 +298,19 @@ export default function Auth() {
         .update({ verified: true })
         .eq('id', otpData.id);
 
-      // Update password using admin API (requires proper setup)
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPass
+      // Use Supabase password recovery flow
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
       });
 
-      if (updateError) {
-        // If direct update fails, use password recovery flow
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail);
-        if (resetError) {
-          throw new Error('Failed to reset password');
-        }
-        toast({
-          title: 'Check Your Email',
-          description: 'We sent you a password reset link. Please check your email.',
-        });
-      } else {
-        toast({
-          title: 'Password Reset!',
-          description: 'Your password has been updated successfully.',
-        });
+      if (resetError) {
+        throw new Error('Failed to send password reset link');
       }
+
+      toast({
+        title: 'Reset Link Sent!',
+        description: 'Please check your email for a password reset link.',
+      });
 
       // Reset state
       setShowForgotPassword(false);
