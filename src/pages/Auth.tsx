@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { sendOTPEmail, generateOTP } from '@/lib/email';
 import { z } from 'zod';
 
 const signInSchema = z.object({
@@ -25,7 +28,11 @@ export default function Auth() {
   const [activeTab, setActiveTab] = useState('signin');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showOTPInput, setShowOTPInput] = useState(false);
+  const [signupData, setSignupData] = useState<any>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const { signIn, signUp, user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -83,11 +90,39 @@ export default function Auth() {
 
     try {
       signUpSchema.parse(data);
-      const { error } = await signUp(data.email, data.password, data.fullName);
-      if (!error) {
-        setActiveTab('signin');
+      
+      // Generate and send OTP
+      const otp = generateOTP();
+      
+      // Store OTP in database
+      const { error: otpError } = await (supabase as any)
+        .from('email_otp')
+        .insert({
+          email: data.email,
+          otp: otp,
+        });
+
+      if (otpError) {
+        throw new Error('Failed to generate OTP');
       }
-    } catch (error) {
+
+      // Send OTP email
+      const emailResult = await sendOTPEmail(data.email, otp);
+      
+      if (!emailResult.success) {
+        throw new Error(emailResult.error || 'Failed to send OTP email');
+      }
+
+      // Store signup data for later use
+      setSignupData(data);
+      setShowOTPInput(true);
+      setOtpSent(true);
+      
+      toast({
+        title: 'OTP Sent!',
+        description: `Please check ${data.email} for your verification code.`,
+      });
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
         error.errors.forEach((err) => {
@@ -96,7 +131,75 @@ export default function Auth() {
           }
         });
         setErrors(fieldErrors);
+      } else {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to send OTP. Please try again.',
+          variant: 'destructive',
+        });
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrors({});
+
+    const formData = new FormData(e.currentTarget);
+    const enteredOTP = formData.get('otp') as string;
+
+    try {
+      // Verify OTP from database
+      const { data: otpData, error: otpError } = await (supabase as any)
+        .from('email_otp')
+        .select('*')
+        .eq('email', signupData.email)
+        .eq('otp', enteredOTP)
+        .eq('verified', false)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (otpError || !otpData) {
+        throw new Error('Invalid or expired OTP');
+      }
+
+      // Mark OTP as verified
+      await (supabase as any)
+        .from('email_otp')
+        .update({ verified: true })
+        .eq('id', otpData.id);
+
+      // Create user account
+      const { error: signUpError } = await signUp(
+        signupData.email,
+        signupData.password,
+        signupData.fullName
+      );
+
+      if (signUpError) {
+        throw new Error(signUpError.message);
+      }
+
+      toast({
+        title: 'Account Created!',
+        description: 'Your email has been verified. You can now sign in.',
+      });
+
+      // Reset state and switch to sign in
+      setShowOTPInput(false);
+      setSignupData(null);
+      setActiveTab('signin');
+    } catch (error: any) {
+      toast({
+        title: 'Verification Failed',
+        description: error.message || 'Invalid OTP. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -163,11 +266,49 @@ export default function Auth() {
           <TabsContent value="signup">
             <Card>
               <CardHeader>
-                <CardTitle>Create Account</CardTitle>
-                <CardDescription>Sign up to start ordering quality medicines</CardDescription>
+                <CardTitle>{showOTPInput ? 'Verify Email' : 'Create Account'}</CardTitle>
+                <CardDescription>
+                  {showOTPInput 
+                    ? 'Enter the 6-digit code sent to your email' 
+                    : 'Sign up to start ordering quality medicines'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSignUp} className="space-y-4">
+                {showOTPInput ? (
+                  <form onSubmit={handleVerifyOTP} className="space-y-4">
+                    <div>
+                      <Label htmlFor="otp">Verification Code</Label>
+                      <Input
+                        id="otp"
+                        name="otp"
+                        type="text"
+                        placeholder="123456"
+                        maxLength={6}
+                        required
+                        className="text-center text-2xl tracking-widest"
+                      />
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Check your email for the 6-digit verification code
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" className="flex-1 btn-primary" disabled={loading}>
+                        {loading ? 'Verifying...' : 'Verify OTP'}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setShowOTPInput(false);
+                          setSignupData(null);
+                        }}
+                      >
+                        Back
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSignUp} className="space-y-4">
                   <div>
                     <Label htmlFor="signup-name">Full Name</Label>
                     <Input
@@ -221,9 +362,10 @@ export default function Auth() {
                     )}
                   </div>
                   <Button type="submit" className="w-full btn-primary" disabled={loading}>
-                    {loading ? 'Creating account...' : 'Sign Up'}
+                    {loading ? 'Sending OTP...' : 'Send Verification Code'}
                   </Button>
                 </form>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
